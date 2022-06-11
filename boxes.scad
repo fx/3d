@@ -1,6 +1,5 @@
-// Stackable Assortment System by Marian Rudzynski
-// https://www.thingiverse.com/fx_
-// https://twitter.com/fyrn
+// Stackable Box Assortment System by Marian Rudzynski
+// https://github.com/fx/3d
 //
 // Based on 1SPIRE's work
 // https://www.thingiverse.com/thing:4638621
@@ -12,23 +11,23 @@
 
 /* [Drawer Parameters] */
 // Inside Drawer Width
-ID_W=335;
+ID_W=493;
 // Inside Drawer Length
-ID_L=430; 
+ID_L=551; 
 // Inside Drawer Height
-ID_H=80; 
+ID_H=65; 
 
 /* [Matrix and Grid Parameters] */
 //Matrix Drawer Width
-MAT_W=6; //[1:1:20]
+MAT_W=8; //[1:1:20]
 //Matrix Drawer Length
-MAT_L=8; //[1:1:20]
+MAT_L=9; //[1:1:20]
 //Matrix Drawer Height
 MAT_H=1; //[1:1:6]
 //Tolerance (Space between boxes)
 Tol=0.4; 
 //Grid Tickness (radius value = height = half of the width)
-G_rad=2;
+G_rad=5;
 
 /* [Boxes Parameters] */
 //Wall Thickness Box
@@ -45,12 +44,16 @@ ST_O=0;
 ST_W=30; 
 //Sticker Lip Height
 ST_H=9; 
+// Add magnet insert
+MAGNET = 0; //[0:No,1:Yes]
 // Magnet cavity diameter
 MAGNET_DIAMETER = 18.5;
 // Magnet cavity height
 MAGNET_HEIGHT = 5.5;
 //Definition 
 $fn=60; //[20:120]
+// Make stackable boxes
+STACKABLE = 1; // [0:No,1:Yes]
 
 /* [Grid to print, see ECHO for the exact size] */
 //Number of grid sections on the width, must be < Matrix Drawer Width
@@ -88,7 +91,6 @@ echo("Matrix Height unit=",MAT_H_UNIT);
 echo("Grid to print Width=",GTP_W*MAT_W_UNIT);
 echo("Grid to print Length=",GTP_L*MAT_L_UNIT);
 
-
 module Drawer() {
   difference() {
     translate([-ID_W/2-10,-ID_L/2-10,-5]) cube([ID_W+20,ID_L+20,ID_H+5]);
@@ -123,36 +125,68 @@ module Grid() {
 }
 
 module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
+  bottom_radius = (STACKABLE == 1) ? 4 : G_rad;
+
+  if (STACKABLE == 1) {
+    difference() {
+      hull() {
+        for(i=[-1,1],j=[-1,1]) {
+          translate([
+            i * (DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-(B_WT+Tol)),
+            j * (DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-(B_WT+Tol)),
+            0
+          ])
+          cylinder(r=B_rad+B_WT,h=bottom_radius+(Tol*2));
+        }
+      }
+
+      hull() {
+        for(i=[-1,1],j=[-1,1]) {
+          translate([
+            i * (DIV_W*MAT_W_UNIT/2-B_WT-Tol/2-( (B_WT+Tol) * 2 )),
+            j * (DIV_L*MAT_L_UNIT/2-B_WT-Tol/2-(( B_WT+Tol )*2)),
+            B_BT
+          ])
+          cylinder(r=(B_rad+B_WT)/2,h=bottom_radius+(Tol*2));
+        }
+      }
+    }
+  }
+
   difference() {
     hull() {
       for(i=[-1,1],j=[-1,1]) {
-        translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),G_rad+0.2]) 
-          cylinder(r=B_rad+B_WT,h=DIV_H*MAT_H_UNIT-G_rad-0.2);
-        translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-G_rad),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-G_rad),0]) 
-          cylinder(r=B_rad+B_WT,h=B_BT);
+        translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),bottom_radius+0.2]) 
+          cylinder(r=B_rad+B_WT,h=DIV_H*MAT_H_UNIT-bottom_radius-0.2);
+
+        if (STACKABLE == 0) {
+          translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),0]) 
+            cylinder(r=B_rad+B_WT,h=B_BT);
+        }
       }
     }
-    
+
+
     if (GI==1) {
       for(i=[1:1:DIV_W-1]) 
         translate([i*MAT_W_UNIT-DIV_W*MAT_W_UNIT/2,0,0]) 
         rotate([90,0,0]) 
-        cylinder(d=2*G_rad+0.4,h=DIV_L*MAT_L_UNIT+2,$fn=4,center=true);
+        cylinder(d=2*bottom_radius+0.4,h=DIV_L*MAT_L_UNIT+2,$fn=4,center=true);
 
       for(i=[1:1:DIV_L-1]) 
         translate([0,i*MAT_L_UNIT-DIV_L*MAT_L_UNIT/2,0]) 
         rotate([0,90,0]) 
-        cylinder(d=2*G_rad+0.4,h=DIV_W*MAT_W_UNIT+2,$fn=4,center=true);
+        cylinder(d=2*bottom_radius+0.4,h=DIV_W*MAT_W_UNIT+2,$fn=4,center=true);
     }
 
-
-
-
     // Magnet inset
-    if (MAGNET_DIAMETER > 0) {
-      for(i=[0:1:DIV_W-1])
-        translate([(i * MAT_W_UNIT) - ((DIV_W * MAT_W_UNIT) - MAT_W_UNIT) / 2, 0, 0]) 
-        cylinder(d = MAGNET_DIAMETER, h = MAGNET_HEIGHT, center=true);
+    if (STACKABLE == 0 && MAGNET > 0) {
+      for(x=[0:1:DIV_L], y=[0:1:DIV_W])
+        translate([
+          (x * MAT_W_UNIT) - ((DIV_W * MAT_W_UNIT) - MAT_W_UNIT) / 2, 
+          (y * MAT_L_UNIT) - ((DIV_L * MAT_L_UNIT) - MAT_L_UNIT) / 2, 
+          MAGNET_HEIGHT / 2]) 
+        cylinder(d = MAGNET_DIAMETER, h = MAGNET_HEIGHT + 0.05, center=true);
     }
 
     difference() {
@@ -161,27 +195,27 @@ module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
           // Note: 1.8 used to be 0.2, any unforeseen side effects?
           // Exterior hull seems unchanged
           // Increased to get smooth bottom w/ magnets
-          translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),G_rad+1.5]) 
+          translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),bottom_radius+1.8]) 
           cylinder(r=B_rad,h = ( DIV_H * MAT_H_UNIT ));
         
-        if (MAGNET_DIAMETER == 0) {
+        // When a magnet insert is used, raise the floor
+        if (STACKABLE == 1 || MAGNET == 0) {
           for(i=[-1,1],j=[-1,1]) 
-            translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-G_rad),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-G_rad),B_BT]) 
+            translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),B_BT]) 
             cylinder(r=B_rad,h=DIV_H*MAT_H_UNIT);
         }
       }
       
-      if (GI==1) {
+      if (STACKABLE == 0 && GI == 1) {
         translate([0,0,0]) {
           for(i=[1:1:DIV_W-1]) {
             translate([i*MAT_W_UNIT-DIV_W*MAT_W_UNIT/2,0,0])
             rotate([90,0,0])
-            cylinder(d=2*G_rad+0.4+2*B_BT,h=DIV_L*MAT_L_UNIT+2,$fn=4,center=true);
+            cylinder(d=2*bottom_radius+0.4+2*B_BT,h=DIV_L*MAT_L_UNIT+2,$fn=4,center=true);
            }
-          for(i=[1:1:DIV_L-1]) translate([0,i*MAT_L_UNIT-DIV_L*MAT_L_UNIT/2,0]) rotate([0,90,0]) cylinder(d=2*G_rad+0.4+2*B_BT,h=DIV_W*MAT_W_UNIT+2,$fn=4,center=true);
+          for(i=[1:1:DIV_L-1]) translate([0,i*MAT_L_UNIT-DIV_L*MAT_L_UNIT/2,0]) rotate([0,90,0]) cylinder(d=2*bottom_radius+0.4+2*B_BT,h=DIV_W*MAT_W_UNIT+2,$fn=4,center=true);
         }
       }
-      
     
       if (ST==1) {
         if (DST==0) {
