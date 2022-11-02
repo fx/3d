@@ -53,7 +53,7 @@ MAGNET_HEIGHT = 5.5;
 //Definition 
 $fn=60; //[20:120]
 // Make stackable boxes
-STACKABLE = 1; // [0:No,1:Yes]
+STACKABLE = 0; // [0:No,1:Top,2:Bottom,3:Middle]
 
 /* [Grid to print, see ECHO for the exact size] */
 //Number of grid sections on the width, must be < Matrix Drawer Width
@@ -78,9 +78,12 @@ DST=0; //[0:No,1:Yes]
 BTP_SW=0; //[0:1:20]
 //Box separators, Coef of matrix along length, must be < BTP_L
 BTP_SL=0; //[0:1:20]
+//Add grooves for walls and other inserts
+GROOVY=1; //[0:No,1:Yes]
+
 
 /* [Preview and Render] */
-Preview=2; //[0:Drawer and grid preview,1:Grid to print,2:Setup Preview,3:Box to print]
+Preview=2; //[0:Drawer and grid preview,1:Grid to print,2:Setup Preview,3:Box to print,4:Inserts,5:Insert to print]
 
 MAT_W_UNIT=ID_W/MAT_W;
 MAT_L_UNIT=ID_L/MAT_L;
@@ -124,8 +127,43 @@ module Grid() {
   }
 }
 
+module Insert(DIV_H) {
+  bottom = ((STACKABLE == 1) ? 4 : G_rad) + 1.8;
+  cube([
+    B_WT, 
+    (BTP_L * MAT_L_UNIT) - (B_WT * 2), 
+    MAT_H_UNIT * DIV_H - bottom]);
+}
+
+module Inserts(DIV_H) {
+  bottom = ((STACKABLE == 1) ? 4 : G_rad) + 1.8;
+
+  for(i=[1:1:BTP_SW]) 
+    translate([
+      i * BTP_W * MAT_W_UNIT / (BTP_SW + 1) - BTP_W * MAT_W_UNIT / 2,
+      -BTP_L * (MAT_L_UNIT / 2) + B_WT / 2 + Tol,
+      bottom
+    ]) 
+    cube([
+      B_WT + Tol * 2, 
+      (BTP_L * MAT_L_UNIT + Tol * 2) - (B_WT * 2), 
+      MAT_H_UNIT * DIV_H - bottom]);
+
+  for(i=[1:1:BTP_SL]) 
+    translate([
+      -BTP_W * (MAT_W_UNIT / 2) + B_WT / 2 + Tol,
+      i * BTP_L * MAT_L_UNIT / (BTP_SL + 1) - BTP_L * MAT_L_UNIT / 2,
+      bottom
+    ])
+    cube([
+      (BTP_W * MAT_W_UNIT + Tol * 2) - (B_WT * 2), 
+      B_WT + Tol * 2, 
+      MAT_H_UNIT * DIV_H - (bottom)]);
+}
+
 module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
   bottom_radius = (STACKABLE == 1) ? 4 : G_rad;
+  bottom = bottom_radius + 1.8;
 
   if (STACKABLE == 1) {
     difference() {
@@ -159,13 +197,12 @@ module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
         translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),bottom_radius+0.2]) 
           cylinder(r=B_rad+B_WT,h=DIV_H*MAT_H_UNIT-bottom_radius-0.2);
 
-        if (STACKABLE == 0) {
+        if (STACKABLE == 0 || STACKABLE == 2) {
           translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),0]) 
             cylinder(r=B_rad+B_WT,h=B_BT);
         }
       }
     }
-
 
     if (GI==1) {
       for(i=[1:1:DIV_W-1]) 
@@ -180,7 +217,7 @@ module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
     }
 
     // Magnet inset
-    if (STACKABLE == 0 && MAGNET > 0) {
+    if ((STACKABLE == 0 || STACKABLE == 2) && MAGNET > 0) {
       for(x=[0:1:DIV_L], y=[0:1:DIV_W])
         translate([
           (x * MAT_W_UNIT) - ((DIV_W * MAT_W_UNIT) - MAT_W_UNIT) / 2, 
@@ -189,24 +226,57 @@ module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
         cylinder(d = MAGNET_DIAMETER, h = MAGNET_HEIGHT + 0.05, center=true);
     }
 
+    if (GROOVY == 1) {
+      Inserts(DIV_H);
+    }
+
+    // Make room for stacking on bottom/middle boxes w/ grooves.
+    if (STACKABLE == 2 || STACKABLE == 3) {
+        hull() {
+          for(i=[-1,1],j=[-1,1])
+            translate([
+              i * (DIV_W * MAT_W_UNIT / 2 - B_rad - B_WT + Tol),
+              j * (DIV_L * MAT_L_UNIT / 2 - B_rad - B_WT + Tol),
+              (DIV_H * MAT_H_UNIT) - (bottom_radius + (Tol * 2))
+            ])
+            cylinder(r=B_rad, h = bottom_radius + (Tol * 2));
+        }
+    }
+
     difference() {
       hull() {
-        for(i=[-1,1],j=[-1,1]) 
-          // Note: 1.8 used to be 0.2, any unforeseen side effects?
-          // Exterior hull seems unchanged
-          // Increased to get smooth bottom w/ magnets
-          translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2),bottom_radius+1.8]) 
-          cylinder(r=B_rad,h = ( DIV_H * MAT_H_UNIT ));
+        for(i=[-1,1],j=[-1,1]) {
+          // 😎 Double up wall thickness for grooves
+          if (GROOVY == 1) {
+            translate([
+              i * (DIV_W * MAT_W_UNIT / 2 - B_rad - B_WT * 2 - Tol * 0.5),
+              j * (DIV_L * MAT_L_UNIT / 2 - B_rad - B_WT * 2 - Tol * 0.5),
+              bottom
+            ])
+            cylinder(r=B_rad, h = (DIV_H * MAT_H_UNIT) - bottom + 0.001);
+          } else {
+            translate([
+              i * (DIV_W * MAT_W_UNIT / 2 - B_rad - B_WT - Tol * 0.5),
+              j * (DIV_L * MAT_L_UNIT / 2 - B_rad - B_WT - Tol * 0.5),
+              bottom
+            ])
+            cylinder(r=B_rad, h = (DIV_H * MAT_H_UNIT));
+          }
+        }
         
-        // When a magnet insert is used, raise the floor
-        if (STACKABLE == 1 || MAGNET == 0) {
+        // When a magnet insert is used or grooves are enabled, raise the floor
+        if ((GROOVY == 0 && MAGNET == 0) || STACKABLE == 1) {
           for(i=[-1,1],j=[-1,1]) 
-            translate([i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),B_BT]) 
+            translate([
+              i*(DIV_W*MAT_W_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),
+              j*(DIV_L*MAT_L_UNIT/2-B_rad-B_WT-Tol/2-bottom_radius),
+              B_BT
+            ]) 
             cylinder(r=B_rad,h=DIV_H*MAT_H_UNIT);
         }
       }
-      
-      if (STACKABLE == 0 && GI == 1) {
+
+      if ((STACKABLE == 0 || STACKABLE == 2) && GI == 1) {
         translate([0,0,0]) {
           for(i=[1:1:DIV_W-1]) {
             translate([i*MAT_W_UNIT-DIV_W*MAT_W_UNIT/2,0,0])
@@ -245,11 +315,11 @@ module Box(DIV_W,DIV_L,DIV_H) { //DIV=coef matrix (width, length, height)
       }
       else{}
       
-
-      
-      for(i=[1:1:BTP_SW]) translate([i*BTP_W*MAT_W_UNIT/(BTP_SW+1)-BTP_W*MAT_W_UNIT/2,0,-ST_O]) cube([B_WT,BTP_L*MAT_L_UNIT,2*MAT_H_UNIT*DIV_H],center=true);
-      for(i=[1:1:BTP_SL]) translate([0,i*BTP_L*MAT_L_UNIT/(BTP_SL+1)-BTP_L*MAT_L_UNIT/2,-ST_O]) cube([BTP_W*MAT_W_UNIT,B_WT,2*MAT_H_UNIT*DIV_H],center=true);
-      
+      // You can also still print separators, rather than grooves to insert them
+      if (GROOVY == 0) {
+        for(i=[1:1:BTP_SW]) translate([i*BTP_W*MAT_W_UNIT/(BTP_SW+1)-BTP_W*MAT_W_UNIT/2,0,-ST_O]) cube([B_WT,BTP_L*MAT_L_UNIT,2*MAT_H_UNIT*DIV_H],center=true);
+        for(i=[1:1:BTP_SL]) translate([0,i*BTP_L*MAT_L_UNIT/(BTP_SL+1)-BTP_L*MAT_L_UNIT/2,-ST_O]) cube([BTP_W*MAT_W_UNIT,B_WT,2*MAT_H_UNIT*DIV_H],center=true);
+      }
     }
   }
 }
@@ -263,7 +333,6 @@ module GridToPrint(width,length) {
     cube([width*MAT_W_UNIT,length*MAT_L_UNIT,2*G_rad],center=true);
   }
 }
-
 
 module Rendering(Render) {
   if (Render==0) {
@@ -280,6 +349,12 @@ module Rendering(Render) {
   }
   else if (Render==3) {
     Box(BTP_W,BTP_L,BTP_H);
+  }
+  else if (Render == 4) {
+    Inserts(BTP_H);
+  }
+  else if (Render == 5) {
+    Insert(BTP_H);
   }
 }
 
